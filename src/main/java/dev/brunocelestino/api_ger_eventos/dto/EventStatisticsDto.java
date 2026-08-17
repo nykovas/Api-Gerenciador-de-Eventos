@@ -1,4 +1,4 @@
-package dev.brunocelestino.api_ger_eventos.model;
+package dev.brunocelestino.api_ger_eventos.dto;
 
 import lombok.*;
 
@@ -7,7 +7,7 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class EventStatistics {
+public class EventStatisticsDto {
 
     private int totalEvents;
     private int openEvents;

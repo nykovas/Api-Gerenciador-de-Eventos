@@ -1,90 +1,91 @@
 package dev.brunocelestino.api_ger_eventos.service;
 
+import dev.brunocelestino.api_ger_eventos.database.repository.IEventRepository;
 import dev.brunocelestino.api_ger_eventos.dto.EventCount;
 import dev.brunocelestino.api_ger_eventos.exception.*;
 import dev.brunocelestino.api_ger_eventos.dto.EventDto;
 import dev.brunocelestino.api_ger_eventos.dto.SubscribeDto;
-import dev.brunocelestino.api_ger_eventos.model.Event;
-import dev.brunocelestino.api_ger_eventos.model.EventStatistics;
-import dev.brunocelestino.api_ger_eventos.model.EventStatus;
+import dev.brunocelestino.api_ger_eventos.database.model.EventEntity;
+import dev.brunocelestino.api_ger_eventos.dto.EventStatisticsDto;
+import dev.brunocelestino.api_ger_eventos.database.model.EventStatus;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class EventService {
 
-    private final List<Event> events = new ArrayList<>();
+    private final IEventRepository eventRepository;
 
-    public List<Event> list() {
-        return List.copyOf(events);
+    public List<EventEntity> list() {
+        return eventRepository.findAll(Sort.by("id"));
     }
 
-    public Event create(EventDto eventDto) {
+    public EventEntity create(EventDto eventDto){
 
-        Integer id = events.stream()
-                .mapToInt(Event::getId)
-                .max()
-                .orElse(0) + 1;
-
-        Event event = new Event(
-                id,
-                eventDto.getName(),
-                eventDto.getDescription(),
-                eventDto.getLocalization(),
-                eventDto.getDate(),
-                eventDto.getMaxCapacity(),
-                eventDto.getSubscribers(),
-                EventStatus.OPEN);
-
-        if (event.getDate().isBefore(LocalDate.now())){
-            throw new DateEarlierThanTodayException("Não é possível criar eventos que não sejam a partir de hoje.");
+        if (eventDto.getDate().isBefore(LocalDate.now())){
+            throw new BadRequestException("A data do evento não pode ser menor do que a de hoje.");
         }
 
-        events.add(event);
-        return event;
+        EventEntity event = EventEntity.builder()
+                .name(eventDto.getName())
+                .description(eventDto.getDescription())
+                .localization(eventDto.getLocalization())
+                .date(eventDto.getDate())
+                .maxCapacity(eventDto.getMaxCapacity())
+                .subscribers(eventDto.getSubscribers())
+                .status(EventStatus.OPEN)
+                .build();
+
+        return eventRepository.save(event);
     }
 
-    public Event searchById(Integer id) {
-        return events.stream()
-                .filter(e -> e.getId().equals(id))
-                .findAny()
-                .orElseThrow(() -> new EventNotFoundException("Evento não encontrado."));
+    public EventEntity searchById(Integer id) {
+        return eventRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Evento não encontrado."));
     }
 
-    public Event patch(EventDto eventDto, Integer id) {
-        Event event = searchById(id);
+    public EventEntity patch(EventDto eventDto, Integer id) {
+        EventEntity event = searchById(id);
 
         event.setName(eventDto.getName());
         event.setDescription(eventDto.getDescription());
         event.setLocalization(eventDto.getLocalization());
         event.setDate(eventDto.getDate());
-        if (event.getMaxCapacity() <= event.getSubscribers()){
-            throw new MaximumCapacityLowerThanTheNumberOfRegistrantsException("Não é possível reduzir a capacidade máxima de inscritos para um valor menor do que os já inscritos.");
+
+        if (eventDto.getMaxCapacity() < event.getSubscribers()){
+            throw new BadRequestException("Não é possível reduzir a capacidade máxima de inscritos para um valor menor do que os já inscritos.");
         }
+
         event.setMaxCapacity(eventDto.getMaxCapacity());
+
+        eventRepository.save(event);
+
         return event;
 
     }
 
     public void delete(Integer id) {
-        Event event = searchById(id);
-        events.remove(event);
+        EventEntity event = searchById(id);
+        eventRepository.delete(event);
     }
 
     public void subscribe(SubscribeDto subscribeDto) {
-        Event event = searchById(subscribeDto.getEventId());
+        EventEntity event = searchById(subscribeDto.getEventId());
 
         if (event.getStatus().equals(EventStatus.CLOSED)){
-            throw new EventClosedException("O evento está fechado.");
+            throw new ConflictException("O evento está fechado.");
         }
 
         if (subscribeDto.getParticipant() + event.getSubscribers() > event.getMaxCapacity()){
-            throw new MaximumCapacityException("Quantidade de participantes maior do que a suportada. " +
-                    "("+event.getSubscribers()+"/"+event.getMaxCapacity()+")");
+            throw new BadRequestException(String.format(
+                    "Quantidade de participantes maior do que a suportada. (%s/%s)",
+                    event.getSubscribers(), event.getMaxCapacity())
+            );
         }
 
         event.setSubscribers(subscribeDto.getParticipant() + event.getSubscribers());
@@ -93,71 +94,60 @@ public class EventService {
         if (event.getSubscribers().equals(event.getMaxCapacity())){
             event.setStatus(EventStatus.CLOSED);
         }
+
+        eventRepository.save(event);
     }
 
     public void unsubscribe(SubscribeDto subscribeDto){
-        Event event = searchById(subscribeDto.getEventId());
+        EventEntity event = searchById(subscribeDto.getEventId());
         Integer unsub = subscribeDto.getParticipant();
 
         int newSubscribers = event.getSubscribers() - unsub;
 
         if (newSubscribers < 0 ){
-            throw new TooManyCancellationsException("Não é possível cancelar mais do que a quantidade de inscritos." +
+            throw new BadRequestException("Não é possível cancelar mais do que a quantidade de inscritos." +
                     "Quantidade de inscritos atual: " + event.getSubscribers());
         }
 
         event.setSubscribers(newSubscribers);
         updateStatus(event);
+        eventRepository.save(event);
     }
 
-    public List<Event> packedEvents(){
-        return events.stream()
-                .filter(e -> e.getSubscribers().equals(e.getMaxCapacity()))
-                .toList();
+    public List<EventEntity> packedEvents(){
+        return eventRepository.findByPacked();
     }
 
-    public List<Event> notPackedEvents(){
-        return events.stream()
-                .filter(e -> e.getSubscribers() < e.getMaxCapacity())
-                .toList();
+    public List<EventEntity> notPackedEvents(){
+        return eventRepository.findByNotPacked();
     }
 
-    public List<Event> listOrderByDate() {
-        return events.stream()
-                .sorted(Comparator.comparing(Event::getDate))
-                .toList();
+    public List<EventEntity> listOrderByDate() {
+        return eventRepository.findAllByOrderByDateAsc();
     }
 
     public EventCount countEvents() {
-        int size = events.size();
         return EventCount.builder()
-                .total(size)
+                .total(eventRepository.findAll().size())
                 .build();
     }
 
-    public List<Event> eventsToday() {
-        return events.stream()
-                .filter(e -> LocalDate.now().equals(e.getDate()))
-                .toList();
+    public List<EventEntity> eventsToday() {
+        return eventRepository.findAllByToday();
     }
 
-    public Event cancelAllSubscriptions(Integer id) {
-        Event event = searchById(id);
+    public EventEntity cancelAllSubscriptions(Integer id) {
+        EventEntity event = searchById(id);
         event.setSubscribers(0);
+        eventRepository.save(event);
         return event;
     }
 
-    public Event duplicateEvent(Integer id) {
-        Event eventToBeDuplicated = searchById(id);
+    public EventEntity duplicateEvent(Integer id) {
+        EventEntity eventToBeDuplicated = searchById(id);
 
-        Integer newId = events.stream()
-                .mapToInt(Event::getId)
-                .max()
-                .orElse(0) + 1;
-
-        Event eventDuplicated = Event.builder()
-                .id(newId)
-                .name(eventToBeDuplicated.getName())
+        EventEntity eventDuplicated = EventEntity.builder()
+                .name(eventToBeDuplicated.getName() + "(Duplicated)")
                 .description(eventToBeDuplicated.getDescription())
                 .localization(eventToBeDuplicated.getLocalization())
                 .date(eventToBeDuplicated.getDate())
@@ -166,13 +156,13 @@ public class EventService {
                 .status(EventStatus.OPEN)
                 .build();
 
-        events.add(eventDuplicated);
+        eventRepository.save(eventDuplicated);
 
         return eventDuplicated;
     }
 
-    public Event alternateStatus(Integer id){
-        Event event = searchById(id);
+    public EventEntity alternateStatus(Integer id){
+        EventEntity event = searchById(id);
 
         if (event.getStatus().equals(EventStatus.OPEN)){
             event.setStatus(EventStatus.CLOSED);
@@ -180,39 +170,28 @@ public class EventService {
             event.setStatus(EventStatus.OPEN);
         }
 
+        eventRepository.save(event);
         return event;
     }
 
-    public EventStatistics statistics(){
+    public EventStatisticsDto statistics(){
 
-        int totalEvents = events.size();
-        int openedEvents = Math.toIntExact(events.stream()
-                .filter(e -> e.getStatus().equals(EventStatus.OPEN))
-                .count());
-        int closedEvents = Math.toIntExact(events.stream()
-                .filter(e -> e.getStatus().equals(EventStatus.CLOSED))
-                .count());
+        int totalEvents = eventRepository.findAll().size();
+        int openedEvents = notPackedEvents().size();
+        int closedEvents = packedEvents().size();
+        int totalSubscribers = eventRepository.totalSubscribers();
+        int averageSubscribers = eventRepository.averageSubscribers();
 
-        int totalSubscribers = events.stream()
-                .mapToInt(Event::getSubscribers)
-                .sum();
-
-        int averageSubscribers = (int) events.stream()
-                .mapToInt(Event::getSubscribers)
-                .average()
-                .orElse(0);
-
-        return EventStatistics.builder()
+        return EventStatisticsDto.builder()
                 .totalEvents(totalEvents)
                 .openEvents(openedEvents)
                 .closedEvents(closedEvents)
                 .totalSubscribers(totalSubscribers)
                 .averageSubscribers(averageSubscribers)
                 .build();
-
     }
 
-    private void updateStatus(Event event) {
+    private void updateStatus(EventEntity event) {
         if (event.getSubscribers().equals(event.getMaxCapacity())) {
             event.setStatus(EventStatus.CLOSED);
         } else {

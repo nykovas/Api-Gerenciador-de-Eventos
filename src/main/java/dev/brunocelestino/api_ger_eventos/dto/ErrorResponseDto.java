@@ -1,20 +1,18 @@
-package dev.brunocelestino.api_ger_eventos.exception;
+package dev.brunocelestino.api_ger_eventos.dto;
 
 import lombok.*;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ErrorResponse {
+public class ErrorResponseDto {
 
     private LocalDateTime timeStamp;
     private Integer status;
     private String message;
-    private Map<String, String> invalidFields;
 
 }

@@ -3,8 +3,8 @@ package dev.brunocelestino.api_ger_eventos.controller;
 import dev.brunocelestino.api_ger_eventos.dto.EventCount;
 import dev.brunocelestino.api_ger_eventos.dto.EventDto;
 import dev.brunocelestino.api_ger_eventos.dto.SubscribeDto;
-import dev.brunocelestino.api_ger_eventos.model.Event;
-import dev.brunocelestino.api_ger_eventos.model.EventStatistics;
+import dev.brunocelestino.api_ger_eventos.database.model.EventEntity;
+import dev.brunocelestino.api_ger_eventos.dto.EventStatisticsDto;
 import dev.brunocelestino.api_ger_eventos.service.EventService;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
@@ -23,19 +23,19 @@ public class EventController {
 
     @GetMapping
     @ResponseStatus(HttpStatus.OK)
-    public List<Event> list(){
+    public List<EventEntity> list(){
         return eventService.list();
     }
 
     @GetMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
-    public Event listById(@PathVariable Integer id){
+    public EventEntity listById(@PathVariable Integer id){
         return eventService.searchById(id);
     }
 
     @GetMapping("/events/order/date")
     @ResponseStatus(HttpStatus.OK)
-    public List<Event> orderByDate(){
+    public List<EventEntity> orderByDate(){
         return eventService.listOrderByDate();
     }
 
@@ -47,37 +47,37 @@ public class EventController {
 
     @GetMapping("/events/today")
     @ResponseStatus(HttpStatus.OK)
-    public List<Event> eventsToday(){
+    public List<EventEntity> eventsToday(){
         return eventService.eventsToday();
     }
 
     @GetMapping("/events/statistics")
     @ResponseStatus(HttpStatus.OK)
-    public EventStatistics eventStatistics(){
+    public EventStatisticsDto eventStatistics(){
         return eventService.statistics();
     }
 
     @GetMapping("/events/packed")
     @ResponseStatus(HttpStatus.OK)
-    public List<Event> packedEvents(){
+    public List<EventEntity> packedEvents(){
         return eventService.packedEvents();
     }
 
     @GetMapping("/events/notPacked")
     @ResponseStatus(HttpStatus.OK)
-    public List<Event> notPackedEvents(){
+    public List<EventEntity> notPackedEvents(){
         return eventService.notPackedEvents();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Event createEvent(@Valid @RequestBody EventDto eventDto){
+    public EventEntity createEvent(@Valid @RequestBody EventDto eventDto){
         return eventService.create(eventDto);
     }
 
     @PostMapping("/{id}/duplicate")
     @ResponseStatus(HttpStatus.OK)
-    public Event duplicateEvent(@PathVariable Integer id){
+    public EventEntity duplicateEvent(@PathVariable Integer id){
         return eventService.duplicateEvent(id);
     }
 
@@ -95,21 +95,21 @@ public class EventController {
 
     @PatchMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
-    public Event patch(@Valid
+    public EventEntity patch(@Valid
                        @RequestBody EventDto event,
-                       @PathVariable Integer id){
+                             @PathVariable Integer id){
         return eventService.patch(event, id);
     }
 
     @PatchMapping("/{id}/reset")
     @ResponseStatus(HttpStatus.OK)
-    public Event cancelAllSubscriptions(@PathVariable Integer id){
+    public EventEntity cancelAllSubscriptions(@PathVariable Integer id){
         return eventService.cancelAllSubscriptions(id);
     }
 
     @PatchMapping("/{id}/alternate")
     @ResponseStatus(HttpStatus.OK)
-    public Event alternateEventStatus(@PathVariable Integer id){
+    public EventEntity alternateEventStatus(@PathVariable Integer id){
         return eventService.alternateStatus(id);
     }
 
