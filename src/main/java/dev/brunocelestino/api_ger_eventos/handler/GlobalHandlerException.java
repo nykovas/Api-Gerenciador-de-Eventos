@@ -10,12 +10,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalHandlerException {
 
-    @ExceptionHandler(EventNotFoundException.class)
+    @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponseDto> handleNotFound(NotFoundException ex){
         ErrorResponseDto response =
                 buildResponse(
                         ex.getMessage(),
-                        HttpStatus.BAD_REQUEST.value());
+                        HttpStatus.NOT_FOUND.value());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
